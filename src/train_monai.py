@@ -29,18 +29,22 @@ def read_list(csv_path):
     return rows
 
 
-def get_transforms(patch=(96, 96, 96), pixdim=(1.0, 1.0, 1.0)):
-    return Compose([
+def get_transforms(patch=(96, 96, 96), pixdim=(1.0, 1.0, 1.0), training=True):
+    """Shared preprocessing; random pos/neg crops only for the training split."""
+    tf = [
         LoadImaged(keys=["image", "label"]),
         EnsureChannelFirstd(keys=["image", "label"]),
         Spacingd(keys=["image", "label"], pixdim=pixdim, mode=("bilinear", "nearest")),
         Orientationd(keys=["image", "label"], axcodes="RAS"),
         ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250,
                              b_min=0.0, b_max=1.0, clip=True),
-        RandCropByPosNegLabeld(keys=["image", "label"], label_key="label",
-                               spatial_size=patch, pos=1, neg=1, num_samples=2),
-        ToTensord(keys=["image", "label"]),
-    ])
+    ]
+    if training:
+        tf.append(RandCropByPosNegLabeld(
+            keys=["image", "label"], label_key="label",
+            spatial_size=patch, pos=1, neg=1, num_samples=2))
+    tf.append(ToTensord(keys=["image", "label"]))
+    return Compose(tf)
 
 
 def train(train_csv, val_csv, out_dir, epochs=200, lr=1e-4, batch=1, patch=96,
@@ -51,7 +55,9 @@ def train(train_csv, val_csv, out_dir, epochs=200, lr=1e-4, batch=1, patch=96,
     tf = get_transforms(patch=(patch, patch, patch))
 
     train_ds = Dataset(read_list(train_csv), transform=tf)
-    val_ds = Dataset(read_list(val_csv), transform=get_transforms(patch=(patch, patch, patch)))
+    val_ds = Dataset(read_list(val_csv),
+                     transform=get_transforms(patch=(patch, patch, patch),
+                                              training=False))
     train_loader = DataLoader(train_ds, batch_size=batch, shuffle=True,
                               num_workers=2, collate_fn=list_data_collate)
     val_loader = DataLoader(val_ds, batch_size=1, num_workers=0)
