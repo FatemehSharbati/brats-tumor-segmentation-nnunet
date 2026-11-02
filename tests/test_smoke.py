@@ -39,6 +39,27 @@ def test_partial_scores():
     assert scores["TC"] < 1.0
 
 
+def test_dice_score_edge_cases():
+    empty = np.zeros((6, 6, 6), dtype=np.int16)
+    full = np.ones((6, 6, 6), dtype=np.int16)
+    # empty vs empty is a perfect match, not a division-by-zero
+    assert dice_score(empty, empty) == 1.0
+    # no overlap at all
+    assert dice_score(empty, full) == 0.0
+    assert dice_score(full, empty) == 0.0
+    # empty segmentations score perfectly for every region
+    scores = brats_scores(empty, empty)
+    assert scores == {"WT": 1.0, "TC": 1.0, "ET": 1.0}, scores
+
+
+def test_region_mask_unknown_region():
+    try:
+        region_mask(np.zeros((4, 4, 4), dtype=np.int16), "XX")
+    except KeyError:
+        return
+    raise AssertionError("expected KeyError for unknown region")
+
+
 def test_converter(tmp_path):
     import nibabel as nib
     root = tmp_path / "BraTS"
