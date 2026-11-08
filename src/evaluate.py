@@ -4,6 +4,9 @@ BraTS seg labels: 0 background, 1 necrotic/non-enhancing core,
 2 edema, 4 enhancing tumor.
 Regions: WT={1,2,4}, TC={1,4}, ET={4}.
 """
+import argparse
+from pathlib import Path
+
 import numpy as np
 
 REGIONS = {
@@ -73,3 +76,41 @@ def print_report(results):
         for r in regions:
             agg[r].append(scores[r])
     print(f"{'mean':40s}" + "".join(f"{np.mean(agg[r]):10.3f}" for r in regions))
+
+
+def _nifti_files(directory):
+    d = Path(directory)
+    return sorted(p for p in d.iterdir()
+                  if p.is_file() and (p.name.endswith(".nii.gz")
+                                      or p.name.endswith(".nii")))
+
+
+def main(argv=None):
+    """Score a folder of predicted segmentations against ground truth.
+
+    Predictions and targets are paired by filename; a prediction without
+    a matching target fails loudly instead of being silently skipped.
+    """
+    ap = argparse.ArgumentParser(
+        description="Score BraTS predictions vs ground truth (WT/TC/ET Dice)")
+    ap.add_argument("--pred-dir", required=True,
+                    help="directory of predicted segmentations")
+    ap.add_argument("--target-dir", required=True,
+                    help="directory of ground-truth segmentations")
+    args = ap.parse_args(argv)
+
+    pred_files = _nifti_files(args.pred_dir)
+    if not pred_files:
+        raise SystemExit(f"no NIfTI files found in {args.pred_dir}")
+    target_files = []
+    for p in pred_files:
+        t = Path(args.target_dir) / p.name
+        if not t.exists():
+            raise SystemExit(
+                f"no matching target for {p.name} in {args.target_dir}")
+        target_files.append(t)
+    print_report(evaluate_files(pred_files, target_files))
+
+
+if __name__ == "__main__":
+    main()

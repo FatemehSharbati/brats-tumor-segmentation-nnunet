@@ -59,6 +59,17 @@ python -m src.train_monai --train-list train.csv --val-list val.csv \
 
 `train.csv` / `val.csv` format: `t1,t1ce,t2,flair,seg` paths per row.
 
+## Evaluation
+
+Score predicted segmentations against ground truth (WT/TC/ET Dice):
+
+```bash
+python -m src.evaluate --pred-dir /data/pred --target-dir /data/gt
+```
+
+Predictions and targets are paired by filename; a prediction without a
+matching target fails loudly instead of being silently skipped.
+
 ## Modules
 
 | Module | What it does |

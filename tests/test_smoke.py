@@ -124,6 +124,34 @@ def test_converter_empty_root(tmp_path):
         convert(str(root), str(tmp_path / "nnraw"))
 
 
+def test_evaluate_cli(tmp_path, capsys):
+    """The CLI pairs predictions/targets by filename and prints a report."""
+    from src.evaluate import main
+    pred_dir = tmp_path / "pred"
+    target_dir = tmp_path / "gt"
+    pred_dir.mkdir()
+    target_dir.mkdir()
+    seg = _seg()
+    for d in (pred_dir, target_dir):
+        nib.save(nib.Nifti1Image(seg, np.eye(4)), str(d / "case01.nii.gz"))
+    main(["--pred-dir", str(pred_dir), "--target-dir", str(target_dir)])
+    out = capsys.readouterr().out
+    assert "mean" in out
+    assert "1.000" in out  # identical prediction scores a perfect Dice
+
+
+def test_evaluate_cli_missing_target(tmp_path):
+    """A prediction without a matching target fails instead of skipping it."""
+    from src.evaluate import main
+    pred_dir = tmp_path / "pred"
+    target_dir = tmp_path / "gt"
+    pred_dir.mkdir()
+    target_dir.mkdir()
+    nib.save(nib.Nifti1Image(_seg(), np.eye(4)), str(pred_dir / "case01.nii.gz"))
+    with pytest.raises(SystemExit, match="no matching target"):
+        main(["--pred-dir", str(pred_dir), "--target-dir", str(target_dir)])
+
+
 def test_converter(tmp_path):
     import nibabel as nib
     root = tmp_path / "BraTS"
