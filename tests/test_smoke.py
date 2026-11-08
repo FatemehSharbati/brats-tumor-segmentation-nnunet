@@ -89,6 +89,41 @@ def test_print_report_empty(capsys):
     assert "no results to report" in capsys.readouterr().out
 
 
+def test_converter_skips_incomplete_cases(tmp_path, capsys):
+    """A case missing a modality is skipped; only complete cases are counted."""
+    root = tmp_path / "BraTS"
+    complete = root / "BraTS2021_00000"
+    incomplete = root / "BraTS2021_00001"
+    complete.mkdir(parents=True)
+    incomplete.mkdir(parents=True)
+    for m in ["t1", "t1ce", "t2", "flair", "seg"]:
+        nib.save(nib.Nifti1Image(np.zeros((8, 8, 8), np.float32), np.eye(4)),
+                 str(complete / f"BraTS2021_00000_{m}.nii.gz"))
+    # incomplete case: flair file missing
+    for m in ["t1", "t1ce", "t2", "seg"]:
+        nib.save(nib.Nifti1Image(np.zeros((8, 8, 8), np.float32), np.eye(4)),
+                 str(incomplete / f"BraTS2021_00001_{m}.nii.gz"))
+    from src.brats_to_nnunet import convert
+    n = convert(str(root), str(tmp_path / "nnraw"))
+    assert n == 1
+    assert "skip BraTS2021_00001" in capsys.readouterr().out
+    dj = json.loads((tmp_path / "nnraw" / "dataset.json").read_text())
+    assert dj["numTraining"] == 1
+    assert dj["labels"] == {"background": 0, "NCR": 1, "ED": 2, "ET": 4}
+    assert dj["channel_names"] == {"0": "t1", "1": "t1ce", "2": "t2", "3": "flair"}
+    assert len(list((tmp_path / "nnraw" / "imagesTr").glob("*.nii.gz"))) == 4
+    assert len(list((tmp_path / "nnraw" / "labelsTr").glob("*.nii.gz"))) == 1
+
+
+def test_converter_empty_root(tmp_path):
+    """An empty BraTS root fails with a clear error instead of writing junk."""
+    from src.brats_to_nnunet import convert
+    root = tmp_path / "BraTS"
+    root.mkdir()
+    with pytest.raises(SystemExit, match="no case directories"):
+        convert(str(root), str(tmp_path / "nnraw"))
+
+
 def test_converter(tmp_path):
     import nibabel as nib
     root = tmp_path / "BraTS"
