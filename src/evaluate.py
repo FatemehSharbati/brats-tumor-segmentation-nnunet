@@ -42,16 +42,29 @@ def brats_scores(pred_seg, target_seg):
 def evaluate_files(pred_paths, target_paths):
     """Evaluate paired NIfTI files. Returns list of (name, scores)."""
     import nibabel as nib
+    pred_paths = [str(p) for p in pred_paths]
+    target_paths = [str(p) for p in target_paths]
+    if len(pred_paths) != len(target_paths):
+        raise ValueError(
+            f"prediction/target count mismatch: {len(pred_paths)} predictions "
+            f"vs {len(target_paths)} targets — pairing would silently drop cases"
+        )
     results = []
     for pp, tp in zip(pred_paths, target_paths):
         pred = np.asanyarray(nib.load(str(pp)).dataobj)
         target = np.asanyarray(nib.load(str(tp)).dataobj)
-        assert pred.shape == target.shape, f"shape mismatch: {pp}"
+        if pred.shape != target.shape:
+            raise ValueError(
+                f"shape mismatch: {pp} {pred.shape} vs {tp} {target.shape}"
+            )
         results.append((str(pp), brats_scores(pred, target)))
     return results
 
 
 def print_report(results):
+    if not results:
+        print("no results to report")
+        return
     regions = list(REGIONS)
     print(f"{'case':40s}" + "".join(f"{r:>10s}" for r in regions))
     agg = {r: [] for r in regions}

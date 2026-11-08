@@ -4,8 +4,11 @@ from pathlib import Path
 
 import nibabel as nib
 import numpy as np
+import pytest
 
-from src.evaluate import brats_scores, region_mask, dice_score
+from src.evaluate import (
+    brats_scores, region_mask, dice_score, evaluate_files, print_report,
+)
 
 
 def _seg():
@@ -58,6 +61,32 @@ def test_region_mask_unknown_region():
     except KeyError:
         return
     raise AssertionError("expected KeyError for unknown region")
+
+
+def test_evaluate_files_mismatched_lengths(tmp_path):
+    """A count mismatch must fail loudly, not silently drop unpaired cases."""
+    pred = tmp_path / "p.nii.gz"
+    tgt = tmp_path / "t.nii.gz"
+    nib.save(nib.Nifti1Image(np.zeros((8, 8, 8), np.int16), np.eye(4)), str(pred))
+    nib.save(nib.Nifti1Image(np.zeros((8, 8, 8), np.int16), np.eye(4)), str(tgt))
+    with pytest.raises(ValueError, match="count mismatch"):
+        evaluate_files([pred, pred], [tgt])
+
+
+def test_evaluate_files_shape_mismatch(tmp_path):
+    """A shape mismatch must raise, not trip an assert that -O can strip."""
+    pred = tmp_path / "p.nii.gz"
+    tgt = tmp_path / "t.nii.gz"
+    nib.save(nib.Nifti1Image(np.zeros((8, 8, 8), np.int16), np.eye(4)), str(pred))
+    nib.save(nib.Nifti1Image(np.zeros((6, 6, 6), np.int16), np.eye(4)), str(tgt))
+    with pytest.raises(ValueError, match="shape mismatch"):
+        evaluate_files([pred], [tgt])
+
+
+def test_print_report_empty(capsys):
+    """An empty result list reports nothing instead of printing NaN means."""
+    print_report([])
+    assert "no results to report" in capsys.readouterr().out
 
 
 def test_converter(tmp_path):
